@@ -34,7 +34,7 @@ from alpaca.trading.models import (
     CorporateActionAnnouncement,
     AccountConfiguration,
 )
-
+import asyncio
 
 class TradingClient(RESTClient):
     """
@@ -78,7 +78,7 @@ class TradingClient(RESTClient):
 
     # ############################## ORDERS ################################# #
 
-    def submit_order(self, order_data: OrderRequest) -> Union[Order, RawData]:
+    async def submit_order(self, order_data: OrderRequest) -> Union[Order, RawData]:
         """Creates an order to buy or sell an asset.
 
         Args:
@@ -88,14 +88,14 @@ class TradingClient(RESTClient):
             alpaca.trading.models.Order: The resulting submitted order.
         """
         data = order_data.to_request_fields()
-        response = self.post("/orders", data)
+        response = await self.post("/orders", data)
 
         if self._use_raw_data:
             return response
 
         return Order(**response)
 
-    def get_orders(
+    async def get_orders(
         self, filter: Optional[GetOrdersRequest] = None
     ) -> Union[List[Order], RawData]:
         """
@@ -113,14 +113,14 @@ class TradingClient(RESTClient):
         if "symbols" in params and isinstance(params["symbols"], list):
             params["symbols"] = ",".join(params["symbols"])
 
-        response = self.get("/orders", params)
+        response = await self.get("/orders", params)
 
         if self._use_raw_data:
             return response
 
         return TypeAdapter(List[Order]).validate_python(response)
 
-    def get_order_by_id(
+    async def get_order_by_id(
         self, order_id: Union[UUID, str], filter: Optional[GetOrderByIdRequest] = None
     ) -> Union[Order, RawData]:
         """
@@ -138,14 +138,14 @@ class TradingClient(RESTClient):
 
         order_id = validate_uuid_id_param(order_id, "order_id")
 
-        response = self.get(f"/orders/{order_id}", params)
+        response = await self.get(f"/orders/{order_id}", params)
 
         if self._use_raw_data:
             return response
 
         return Order(**response)
 
-    def get_order_by_client_id(self, client_id: str) -> Union[Order, RawData]:
+    async def get_order_by_client_id(self, client_id: str) -> Union[Order, RawData]:
         """
         Returns a specific order by its client order id.
 
@@ -157,14 +157,14 @@ class TradingClient(RESTClient):
         """
         params = {"client_order_id": client_id}
 
-        response = self.get(f"/orders:by_client_order_id", params)
+        response = await self.get(f"/orders:by_client_order_id", params)
 
         if self._use_raw_data:
             return response
 
         return Order(**response)
 
-    def replace_order_by_id(
+    async def replace_order_by_id(
         self,
         order_id: Union[UUID, str],
         order_data: Optional[ReplaceOrderRequest] = None,
@@ -184,28 +184,28 @@ class TradingClient(RESTClient):
 
         order_id = validate_uuid_id_param(order_id, "order_id")
 
-        response = self.patch(f"/orders/{order_id}", params)
+        response = await self.patch(f"/orders/{order_id}", params)
 
         if self._use_raw_data:
             return response
 
         return Order(**response)
 
-    def cancel_orders(self) -> Union[List[CancelOrderResponse], RawData]:
+    async def cancel_orders(self) -> Union[List[CancelOrderResponse], RawData]:
         """
         Cancels all orders.
 
         Returns:
             List[CancelOrderResponse]: The list of HTTP statuses for each order attempted to be cancelled.
         """
-        response = self.delete(f"/orders")
+        response = await self.delete(f"/orders")
 
         if self._use_raw_data:
             return response
 
         return TypeAdapter(List[CancelOrderResponse]).validate_python(response)
 
-    def cancel_order_by_id(self, order_id: Union[UUID, str]) -> None:
+    async def cancel_order_by_id(self, order_id: Union[UUID, str]) -> None:
         """
         Cancels a specific order by its order id.
 
@@ -219,11 +219,11 @@ class TradingClient(RESTClient):
 
         # TODO: Should ideally return some information about the order's cancel status. (Issue #78).
         # TODO: Currently no way to retrieve status details for empty responses with base REST implementation
-        self.delete(f"/orders/{order_id}")
+        await self.delete(f"/orders/{order_id}")
 
     # ############################## POSITIONS ################################# #
 
-    def get_all_positions(
+    async def get_all_positions(
         self,
     ) -> Union[List[Position], RawData]:
         """
@@ -232,14 +232,14 @@ class TradingClient(RESTClient):
         Returns:
             List[Position]: List of open positions.
         """
-        response = self.get("/positions")
+        response = await self.get("/positions")
 
         if self._use_raw_data:
             return response
 
         return TypeAdapter(List[Position]).validate_python(response)
 
-    def get_open_position(
+    async def get_open_position(
         self, symbol_or_asset_id: Union[UUID, str]
     ) -> Union[Position, RawData]:
         """
@@ -252,14 +252,14 @@ class TradingClient(RESTClient):
             Position: Open position of the asset.
         """
         symbol_or_asset_id = validate_symbol_or_asset_id(symbol_or_asset_id)
-        response = self.get(f"/positions/{symbol_or_asset_id}")
+        response = await self.get(f"/positions/{symbol_or_asset_id}")
 
         if self._use_raw_data:
             return response
 
         return Position(**response)
 
-    def close_all_positions(
+    async def close_all_positions(
         self, cancel_orders: Optional[bool] = None
     ) -> Union[List[ClosePositionResponse], RawData]:
         """
@@ -274,7 +274,7 @@ class TradingClient(RESTClient):
             List[ClosePositionResponse]: A list of responses from each closed position containing the status code and
               order id.
         """
-        response = self.delete(
+        response = await self.delete(
             "/positions",
             {"cancel_orders": cancel_orders} if cancel_orders else None,
         )
@@ -284,7 +284,7 @@ class TradingClient(RESTClient):
 
         return TypeAdapter(List[ClosePositionResponse]).validate_python(response)
 
-    def close_position(
+    async def close_position(
         self,
         symbol_or_asset_id: Union[UUID, str],
         close_options: Optional[ClosePositionRequest] = None,
@@ -304,7 +304,7 @@ class TradingClient(RESTClient):
             alpaca.trading.models.Order: The order that was placed to close the position.
         """
         symbol_or_asset_id = validate_symbol_or_asset_id(symbol_or_asset_id)
-        response = self.delete(
+        response = await self.delete(
             f"/positions/{symbol_or_asset_id}",
             close_options.to_request_fields() if close_options else {},
         )
@@ -316,7 +316,7 @@ class TradingClient(RESTClient):
 
     # ############################## Assets ################################# #
 
-    def get_all_assets(
+    async def get_all_assets(
         self, filter: Optional[GetAssetsRequest] = None
     ) -> Union[List[Asset], RawData]:
         """
@@ -332,14 +332,14 @@ class TradingClient(RESTClient):
         # checking to see if we specified at least one param
         params = filter.to_request_fields() if filter is not None else {}
 
-        response = self.get(f"/assets", params)
+        response = await self.get(f"/assets", params)
 
         if self._use_raw_data:
             return response
 
         return TypeAdapter(List[Asset]).validate_python(response)
 
-    def get_asset(self, symbol_or_asset_id: Union[UUID, str]) -> Union[Asset, RawData]:
+    async def get_asset(self, symbol_or_asset_id: Union[UUID, str]) -> Union[Asset, RawData]:
         """
         Returns a specific asset by its symbol or asset id. If the specified asset does not exist
         a 404 error will be thrown.
@@ -353,7 +353,7 @@ class TradingClient(RESTClient):
 
         symbol_or_asset_id = validate_symbol_or_asset_id(symbol_or_asset_id)
 
-        response = self.get(f"/assets/{symbol_or_asset_id}")
+        response = await self.get(f"/assets/{symbol_or_asset_id}")
 
         if self._use_raw_data:
             return response
@@ -362,7 +362,7 @@ class TradingClient(RESTClient):
 
     # ############################## CLOCK & CALENDAR ################################# #
 
-    def get_clock(self) -> Union[Clock, RawData]:
+    async def get_clock(self) -> Union[Clock, RawData]:
         """
         Gets the current market timestamp, whether or not the market is currently open, as well as the times
         of the next market open and close.
@@ -371,14 +371,14 @@ class TradingClient(RESTClient):
             Clock: The market Clock data
         """
 
-        response = self.get("/clock")
+        response = await self.get("/clock")
 
         if self._use_raw_data:
             return response
 
         return Clock(**response)
 
-    def get_calendar(
+    async def get_calendar(
         self,
         filters: Optional[GetCalendarRequest] = None,
     ) -> Union[List[Calendar], RawData]:
@@ -396,7 +396,7 @@ class TradingClient(RESTClient):
             List[Calendar]: A list of Calendar objects representing the market days.
         """
 
-        result = self.get("/calendar", filters.to_request_fields() if filters else {})
+        result = await self.get("/calendar", filters.to_request_fields() if filters else {})
 
         if self._use_raw_data:
             return result
@@ -405,7 +405,7 @@ class TradingClient(RESTClient):
 
     # ############################## ACCOUNT ################################# #
 
-    def get_account(self) -> Union[TradeAccount, RawData]:
+    async def get_account(self) -> Union[TradeAccount, RawData]:
         """
         Returns account details. Contains information like buying power,
         number of day trades, and account status.
@@ -414,14 +414,14 @@ class TradingClient(RESTClient):
             alpaca.trading.models.TradeAccount: The account details
         """
 
-        response = self.get("/account")
+        response = await self.get("/account")
 
         if self._use_raw_data:
             return response
 
         return TradeAccount(**response)
 
-    def get_account_configurations(self) -> Union[AccountConfiguration, RawData]:
+    async def get_account_configurations(self) -> Union[AccountConfiguration, RawData]:
         """
         Returns account configuration details. Contains information like shorting, margin multiplier
         trader confirmation emails, and Pattern Day Trading (PDT) checks.
@@ -429,14 +429,14 @@ class TradingClient(RESTClient):
         Returns:
             alpaca.broker.models.AccountConfiguration: The account configuration details
         """
-        response = self.get("/account/configurations")
+        response = await self.get("/account/configurations")
 
         if self._use_raw_data:
             return response
 
         return AccountConfiguration(**response)
 
-    def set_account_configurations(
+    async def set_account_configurations(
         self, account_configurations: AccountConfiguration
     ) -> Union[AccountConfiguration, RawData]:
         """
@@ -446,7 +446,7 @@ class TradingClient(RESTClient):
         Returns:
             alpaca.broker.models.TradeAccountConfiguration: The account configuration details
         """
-        response = self.patch(
+        response = await self.patch(
             "/account/configurations", data=account_configurations.model_dump()
         )
 
@@ -457,7 +457,7 @@ class TradingClient(RESTClient):
 
     # ############################## WATCHLIST ################################# #
 
-    def get_watchlists(
+    async def get_watchlists(
         self,
     ) -> Union[List[Watchlist], RawData]:
         """
@@ -467,14 +467,14 @@ class TradingClient(RESTClient):
             List[Watchlist]: The list of all watchlists.
         """
 
-        result = self.get(f"/watchlists")
+        result = await self.get(f"/watchlists")
 
         if self._use_raw_data:
             return result
 
         return TypeAdapter(List[Watchlist]).validate_python(result)
 
-    def get_watchlist_by_id(
+    async def get_watchlist_by_id(
         self,
         watchlist_id: Union[UUID, str],
     ) -> Union[Watchlist, RawData]:
@@ -489,14 +489,14 @@ class TradingClient(RESTClient):
         """
         watchlist_id = validate_uuid_id_param(watchlist_id, "watchlist_id")
 
-        result = self.get(f"/watchlists/{watchlist_id}")
+        result = await self.get(f"/watchlists/{watchlist_id}")
 
         if self._use_raw_data:
             return result
 
         return Watchlist(**result)
 
-    def create_watchlist(
+    async def create_watchlist(
         self,
         watchlist_data: CreateWatchlistRequest,
     ) -> Union[Watchlist, RawData]:
@@ -509,7 +509,7 @@ class TradingClient(RESTClient):
         Returns:
             Watchlist: The new watchlist.
         """
-        result = self.post(
+        result = await self.post(
             "/watchlists",
             watchlist_data.to_request_fields(),
         )
@@ -519,7 +519,7 @@ class TradingClient(RESTClient):
 
         return Watchlist(**result)
 
-    def update_watchlist_by_id(
+    async def update_watchlist_by_id(
         self,
         watchlist_id: Union[UUID, str],
         # Might be worth taking a union of this and Watchlist itself; but then we should make a change like that SDK
@@ -538,7 +538,7 @@ class TradingClient(RESTClient):
         """
         watchlist_id = validate_uuid_id_param(watchlist_id, "watchlist_id")
 
-        result = self.put(
+        result = await self.put(
             f"/watchlists/{watchlist_id}",
             watchlist_data.to_request_fields(),
         )
@@ -548,7 +548,7 @@ class TradingClient(RESTClient):
 
         return Watchlist(**result)
 
-    def add_asset_to_watchlist_by_id(
+    async def add_asset_to_watchlist_by_id(
         self,
         watchlist_id: Union[UUID, str],
         symbol: str,
@@ -567,14 +567,14 @@ class TradingClient(RESTClient):
 
         params = {"symbol": symbol}
 
-        result = self.post(f"/watchlists/{watchlist_id}", params)
+        result = await self.post(f"/watchlists/{watchlist_id}", params)
 
         if self._use_raw_data:
             return result
 
         return Watchlist(**result)
 
-    def delete_watchlist_by_id(
+    async def delete_watchlist_by_id(
         self,
         watchlist_id: Union[UUID, str],
     ) -> None:
@@ -589,9 +589,9 @@ class TradingClient(RESTClient):
         """
         watchlist_id = validate_uuid_id_param(watchlist_id, "watchlist_id")
 
-        self.delete(f"/watchlists/{watchlist_id}")
+        await self.delete(f"/watchlists/{watchlist_id}")
 
-    def remove_asset_from_watchlist_by_id(
+    async def remove_asset_from_watchlist_by_id(
         self,
         watchlist_id: Union[UUID, str],
         symbol: str,
@@ -608,7 +608,7 @@ class TradingClient(RESTClient):
         """
         watchlist_id = validate_uuid_id_param(watchlist_id, "watchlist_id")
 
-        result = self.delete(f"/watchlists/{watchlist_id}/{symbol}")
+        result = await self.delete(f"/watchlists/{watchlist_id}/{symbol}")
 
         if self._use_raw_data:
             return result
@@ -617,7 +617,7 @@ class TradingClient(RESTClient):
 
     # ############################## CORPORATE ACTIONS ################################# #
 
-    def get_corporate_announcements(
+    async def get_corporate_announcements(
         self, filter: GetCorporateAnnouncementsRequest
     ) -> Union[List[CorporateActionAnnouncement], RawData]:
         """
@@ -632,14 +632,14 @@ class TradingClient(RESTClient):
         if "ca_types" in params and isinstance(params["ca_types"], list):
             params["ca_types"] = ",".join(params["ca_types"])
 
-        response = self.get("/corporate_actions/announcements", params)
+        response = await self.get("/corporate_actions/announcements", params)
 
         if self._use_raw_data:
             return response
 
         return TypeAdapter(List[CorporateActionAnnouncement]).validate_python(response)
 
-    def get_corporate_announcement_by_id(
+    async def get_corporate_announcement_by_id(
         self, corporate_announcment_id: Union[UUID, str]
     ) -> Union[CorporateActionAnnouncement, RawData]:
         """
@@ -653,7 +653,7 @@ class TradingClient(RESTClient):
             corporate_announcment_id, "corporate_announcment_id"
         )
 
-        response = self.get(
+        response = await self.get(
             f"/corporate_actions/announcements/{corporate_announcment_id}"
         )
 

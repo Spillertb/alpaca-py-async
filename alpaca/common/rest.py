@@ -20,6 +20,9 @@ from alpaca.common.types import RawData, HTTPResult, Credentials
 from .constants import PageItem
 from .enums import PaginationType, BaseURL
 
+import aiohttp
+import asyncio
+
 
 class RESTClient(ABC):
     """Abstract base class for REST clients"""
@@ -64,7 +67,7 @@ class RESTClient(ABC):
         self._sandbox: bool = sandbox
         self._use_basic_auth: bool = use_basic_auth
         self._use_raw_data: bool = raw_data
-        self._session: Session = Session()
+        self._session = None # Will be initialized in an async context
 
         # setting up request retry configurations
         self._retry: int = DEFAULT_RETRY_ATTEMPTS
@@ -79,8 +82,17 @@ class RESTClient(ABC):
 
         if retry_exception_codes:
             self._retry_codes = retry_exception_codes
+            
+    async def _create_session(self):
+        if not self._session:
+            self._session = aiohttp.ClientSession()
 
-    def _request(
+    async def close(self):
+        if self._session:
+            await self._session.close()
+            self._session = None
+
+    async def _request(
         self,
         method: str,
         path: str,
@@ -126,9 +138,9 @@ class RESTClient(ABC):
 
         while retry >= 0:
             try:
-                return self._one_request(method, url, opts, retry)
+                return await self._one_request(method, url, opts, retry)
             except RetryException:
-                time.sleep(self._retry_wait)
+                asyncio.sleep(self._retry_wait)
                 retry -= 1
                 continue
 
@@ -171,7 +183,7 @@ class RESTClient(ABC):
 
         return headers
 
-    def _one_request(self, method: str, url: str, opts: dict, retry: int) -> dict:
+    async def _one_request(self, method: str, url: str, opts: dict, retry: int) -> dict:
         """Perform one request, possibly raising RetryException in the case
         the response is 429. Otherwise, if error text contain "code" string,
         then it decodes to json object and returns APIError.
@@ -190,24 +202,31 @@ class RESTClient(ABC):
         Returns:
             dict: The response data
         """
-        response = self._session.request(method, url, **opts)
+        await self._create_session()
 
         try:
-            response.raise_for_status()
-        except HTTPError as http_error:
-            # retry if we hit Rate Limit
-            if response.status_code in self._retry_codes and retry > 0:
+            if not opts["params"] == None:
+                # remove values of none
+                opts["params"] = {k: v for k, v in opts["params"].items() if v is not None}
+                
+            async with self._session.request(method, url, **opts) as response:
+                response.raise_for_status()
+                return await response.json()
+
+        except aiohttp.ClientResponseError as e:
+            # If it's a rate limit error and we have retries left
+            if e.status in self._retry_codes and retry > 0:
                 raise RetryException()
 
-            # raise API error for all other errors
-            error = response.text
+            # For other HTTP errors, extract the error message and raise an APIError
+            error = str(e)
+            raise APIError(f"HTTP Error: {e.status}, Message: {error}") from e
 
-            raise APIError(error, http_error)
+        except aiohttp.ClientError as e:
+            raise APIError(str(e)) from e
 
-        if response.text != "":
-            return response.json()
 
-    def get(self, path: str, data: Union[dict, str] = None, **kwargs) -> HTTPResult:
+    async def get(self, path: str, data: Union[dict, str] = None, **kwargs) -> HTTPResult:
         """Performs a single GET request
 
         Args:
@@ -218,9 +237,9 @@ class RESTClient(ABC):
         Returns:
             dict: The response
         """
-        return self._request("GET", path, data, **kwargs)
+        return await self._request("GET", path, data, **kwargs)
 
-    def post(self, path: str, data: Union[dict, List[dict], str] = None) -> HTTPResult:
+    async def post(self, path: str, data: Union[dict, List[dict], str] = None) -> HTTPResult:
         """Performs a single POST request
 
         Args:
@@ -231,9 +250,9 @@ class RESTClient(ABC):
         Returns:
             dict: The response
         """
-        return self._request("POST", path, data)
+        return await self._request("POST", path, data)
 
-    def put(self, path: str, data: Union[dict, str] = None) -> dict:
+    async def put(self, path: str, data: Union[dict, str] = None) -> dict:
         """Performs a single PUT request
 
         Args:
@@ -244,9 +263,9 @@ class RESTClient(ABC):
         Returns:
             dict: The response
         """
-        return self._request("PUT", path, data)
+        return await self._request("PUT", path, data)
 
-    def patch(self, path: str, data: Union[dict, str] = None) -> dict:
+    async def patch(self, path: str, data: Union[dict, str] = None) -> dict:
         """Performs a single PATCH request
 
         Args:
@@ -257,9 +276,9 @@ class RESTClient(ABC):
         Returns:
             dict: The response
         """
-        return self._request("PATCH", path, data)
+        return await self._request("PATCH", path, data)
 
-    def delete(self, path, data: Union[dict, str] = None) -> dict:
+    async def delete(self, path, data: Union[dict, str] = None) -> dict:
         """Performs a single DELETE request
 
         Args:
@@ -269,7 +288,7 @@ class RESTClient(ABC):
         Returns:
             dict: The response
         """
-        return self._request("DELETE", path, data)
+        return await self._request("DELETE", path, data)
 
     # TODO: Refactor to be able to handle both parsing to types and parsing to collections of types (parse_as_obj)
     def response_wrapper(

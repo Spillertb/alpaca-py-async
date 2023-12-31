@@ -73,7 +73,7 @@ class StockHistoricalDataClient(RESTClient):
             raw_data=raw_data,
         )
 
-    def get_stock_bars(
+    async def get_stock_bars(
         self, request_params: StockBarsRequest
     ) -> Union[BarSet, RawData]:
         """Returns bar data for an equity or list of equities over a given
@@ -87,9 +87,10 @@ class StockHistoricalDataClient(RESTClient):
         """
 
         params = request_params.to_request_fields()
+        params["timeframe"] = "1Min" # TODO: This is a hack
 
         # paginated get request for market data api
-        raw_bars = self._data_get(
+        raw_bars = await self._data_get(
             endpoint_data_type="bars",
             endpoint_asset_class="stocks",
             api_version="v2",
@@ -101,7 +102,7 @@ class StockHistoricalDataClient(RESTClient):
 
         return BarSet(raw_bars)
 
-    def get_stock_quotes(
+    async def get_stock_quotes(
         self, request_params: StockQuotesRequest
     ) -> Union[QuoteSet, RawData]:
         """Returns level 1 quote data over a given time period for a security or list of securities.
@@ -115,7 +116,7 @@ class StockHistoricalDataClient(RESTClient):
         params = request_params.to_request_fields()
 
         # paginated get request for market data api
-        raw_quotes = self._data_get(
+        raw_quotes = await self._data_get(
             endpoint_data_type="quotes",
             endpoint_asset_class="stocks",
             api_version="v2",
@@ -127,7 +128,7 @@ class StockHistoricalDataClient(RESTClient):
 
         return QuoteSet(raw_quotes)
 
-    def get_stock_trades(
+    async def get_stock_trades(
         self, request_params: StockTradesRequest
     ) -> Union[TradeSet, RawData]:
         """Returns the price and sales history over a given time period for a security or list of securities.
@@ -141,7 +142,7 @@ class StockHistoricalDataClient(RESTClient):
         params = request_params.to_request_fields()
 
         # paginated get request for market data api
-        raw_trades = self._data_get(
+        raw_trades = await self._data_get(
             endpoint_data_type="trades",
             endpoint_asset_class="stocks",
             api_version="v2",
@@ -153,7 +154,7 @@ class StockHistoricalDataClient(RESTClient):
 
         return TradeSet(raw_trades)
 
-    def get_stock_latest_trade(
+    async def get_stock_latest_trade(
         self, request_params: StockLatestTradeRequest
     ) -> Union[Dict[str, Trade], RawData]:
         """Retrieves the latest trade for an equity symbol or list of equities.
@@ -167,7 +168,7 @@ class StockHistoricalDataClient(RESTClient):
 
         params = request_params.to_request_fields()
 
-        raw_latest_trades = self._data_get(
+        raw_latest_trades = await self._data_get(
             endpoint_data_type="trades",
             endpoint_asset_class="stocks",
             api_version="v2",
@@ -180,7 +181,7 @@ class StockHistoricalDataClient(RESTClient):
 
         return parse_obj_as_symbol_dict(Trade, raw_latest_trades)
 
-    def get_stock_latest_quote(
+    async def get_stock_latest_quote(
         self, request_params: StockLatestQuoteRequest
     ) -> Union[Dict[str, Quote], RawData]:
         """Retrieves the latest quote for an equity symbol or list of equity symbols.
@@ -193,7 +194,7 @@ class StockHistoricalDataClient(RESTClient):
         """
         params = request_params.to_request_fields()
 
-        raw_latest_quotes = self._data_get(
+        raw_latest_quotes = await self._data_get(
             endpoint_data_type="quotes",
             endpoint_asset_class="stocks",
             api_version="v2",
@@ -206,7 +207,7 @@ class StockHistoricalDataClient(RESTClient):
 
         return parse_obj_as_symbol_dict(Quote, raw_latest_quotes)
 
-    def get_stock_latest_bar(
+    async def get_stock_latest_bar(
         self, request_params: StockLatestBarRequest
     ) -> Union[Dict[str, Bar], RawData]:
         """Retrieves the latest minute bar for an equity symbol or list of equity symbols.
@@ -219,7 +220,7 @@ class StockHistoricalDataClient(RESTClient):
         """
         params = request_params.to_request_fields()
 
-        raw_latest_bars = self._data_get(
+        raw_latest_bars = await self._data_get(
             endpoint_data_type="bars",
             endpoint_asset_class="stocks",
             api_version="v2",
@@ -232,7 +233,7 @@ class StockHistoricalDataClient(RESTClient):
 
         return parse_obj_as_symbol_dict(Bar, raw_latest_bars)
 
-    def get_stock_snapshot(
+    async def get_stock_snapshot(
         self, request_params: StockSnapshotRequest
     ) -> Union[Dict[str, Snapshot], RawData]:
         """Returns snapshots of queried symbols. Snapshots contain latest trade, latest quote, latest minute bar,
@@ -247,7 +248,7 @@ class StockHistoricalDataClient(RESTClient):
 
         params = request_params.to_request_fields()
 
-        raw_snapshots = self._data_get(
+        raw_snapshots = await self._data_get(
             endpoint_asset_class="stocks",
             endpoint_data_type="snapshot",
             api_version="v2",
@@ -261,7 +262,7 @@ class StockHistoricalDataClient(RESTClient):
         return parse_obj_as_symbol_dict(Snapshot, raw_snapshots)
 
     # TODO: Remove duplication
-    def _data_get(
+    async def _data_get(
         self,
         endpoint_asset_class: str,
         endpoint_data_type: str,
@@ -335,7 +336,7 @@ class StockHistoricalDataClient(RESTClient):
             params["limit"] = actual_limit
             params["page_token"] = page_token
 
-            response = self.get(path=path, data=params, api_version=api_version)
+            response = await self.get(path=path, data=params, api_version=api_version)
 
             # TODO: Merge parsing if possible
             if extension == DataExtensionType.SNAPSHOT:

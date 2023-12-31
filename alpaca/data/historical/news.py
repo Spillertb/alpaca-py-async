@@ -50,12 +50,12 @@ class NewsClient(RESTClient):
             raw_data=raw_data,
         )
 
-    def get_news(self, request_params: NewsRequest) -> Union[RawData, NewsSet]:
+    async def get_news(self, request_params: NewsRequest) -> Union[RawData, NewsSet]:
         """Returns news data
 
         Args:
             request_params (NewsRequest): The request params to filter the news data"""
-        response = self.get(
+        response = await self.get(
             path="/news",
             data=request_params.to_request_fields(),
         )
